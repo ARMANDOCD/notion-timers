@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cronómetros</title>
+<style>
+  body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
+  .timer { margin: 20px auto; padding: 20px; background: #222; border-radius: 10px; width: 250px; }
+  button { margin: 5px; padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+  button:hover { background: #0056b3; }
+</style>
+</head>
+<body>
+<h1>Cronómetros diarios</h1>
+
+<div id="timers"></div>
+
+<script>
+// === CONFIGURACIÓN ===
+const actividades = ["Entrenar", "Estudiar", "Proyectos"];
+const endpoint = "https://script.google.com/macros/s/AKfycby0i_vmIB1hdTsgkXqqOjQb_94yW0xT5XC35aBp8VFiFnCY56lRj_23MNQpDDfUroTj/exec"; // 🔹 Reemplaza con tu URL de Apps Script
+
+// === VARIABLES ===
+let tiempos = {};
+let intervalos = {};
+let fechaActual = new Date().toLocaleDateString("es-PE");
+
+// === CREACIÓN DE INTERFAZ ===
+actividades.forEach(actividad => {
+  const div = document.createElement("div");
+  div.className = "timer";
+  div.innerHTML = `
+    <h2>${actividad}</h2>
+    <div id="display-${actividad}">00:00:00</div>
+    <button onclick="toggle('${actividad}')">Iniciar / Pausar</button>
+    <button onclick="reset('${actividad}')">Reset</button>
+  `;
+  document.getElementById("timers").appendChild(div);
+});
+
+// === FUNCIONES ===
+function cargarDesdeStorage() {
+  const guardado = JSON.parse(localStorage.getItem("tiempos")) || {};
+  if (guardado.fecha !== fechaActual) {
+    // Si es un nuevo día, resetea todo
+    tiempos = {};
+    guardarEnStorage();
+  } else {
+    tiempos = guardado.datos || {};
+    for (let act in tiempos) actualizarDisplay(act);
+  }
+}
+
+function guardarEnStorage() {
+  localStorage.setItem("tiempos", JSON.stringify({fecha: fechaActual, datos: tiempos}));
+}
+
+function actualizarDisplay(actividad) {
+  const total = tiempos[actividad] || 0;
+  const h = String(Math.floor(total / 3600)).padStart(2, "0");
+  const m = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
+  const s = String(total % 60).padStart(2, "0");
+  document.getElementById(`display-${actividad}`).textContent = `${h}:${m}:${s}`;
+}
+
+function toggle(actividad) {
+  if (intervalos[actividad]) {
+    clearInterval(intervalos[actividad]);
+    intervalos[actividad] = null;
+    enviarDatos(actividad);
+  } else {
+    intervalos[actividad] = setInterval(() => {
+      tiempos[actividad] = (tiempos[actividad] || 0) + 1;
+      actualizarDisplay(actividad);
+      guardarEnStorage();
+    }, 1000);
+  }
+}
+
+function reset(actividad) {
+  tiempos[actividad] = 0;
+  actualizarDisplay(actividad);
+  guardarEnStorage();
+  enviarDatos(actividad);
+}
+
+function enviarDatos(actividad) {
+  fetch(endpoint, {
+    method: "POST",
+    body: JSON.stringify({actividad, segundos: tiempos[actividad] || 0})
+  }).catch(() => {}); // Evita errores visibles si no hay conexión
+}
+
+// === RESETEO AUTOMÁTICO A LAS 00:00 ===
+function programarReseteoAutomatico() {
+  const ahora = new Date();
+  const mañana = new Date(ahora);
+  mañana.setHours(24, 0, 5, 0); // 5 segundos después de la medianoche
+  const msRestantes = mañana - ahora;
+
+  setTimeout(() => {
+    // Se ejecuta al llegar a medianoche
+    fechaActual = new Date().toLocaleDateString("es-PE");
+    tiempos = {};
+    guardarEnStorage();
+    actividades.forEach(act => {
+      actualizarDisplay(act);
+      enviarDatos(act); // Enviar reset (0 segundos)
+    });
+    // Volver a programar para el siguiente día
+    programarReseteoAutomatico();
+  }, msRestantes);
+}
+
+// === INICIO ===
+cargarDesdeStorage();
+programarReseteoAutomatico();
+
+</script>
+</body>
+</html>
