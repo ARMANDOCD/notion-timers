@@ -1,314 +1,199 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Cronómetros sincronizados</title>
-<style>
-  :root{--bg:#0f1720;--card:#0b1220;--accent:#0ea5ff}
-  body{font-family:Inter,system-ui,Arial;background:var(--bg);color:#e6eef8;margin:0;padding:18px}
-  header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
-  .controls{display:flex;gap:8px;align-items:center}
-  button{background:var(--accent);border:none;padding:8px 10px;border-radius:8px;color:#012;cursor:pointer;font-weight:700}
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  .card{background:var(--card);padding:12px;border-radius:10px;min-height:120px;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
-  .title{font-weight:700;margin-bottom:8px}
-  .display{font-size:20px;font-weight:800;margin-bottom:8px}
-  .small{font-size:13px;color:#9fb4c8}
-  .row{display:flex;gap:8px;align-items:center}
-  input[type=text], input[type=number]{width:100%;padding:6px;border-radius:6px;border:1px solid #203040;background:#031420;color:#e6eef8}
-  textarea{width:100%;min-height:48px;padding:6px;border-radius:6px;border:1px solid #203040;background:#031420;color:#e6eef8}
-  @media(max-width:900px){ .grid{grid-template-columns:repeat(2,1fr)} }
-  @media(max-width:600px){ .grid{grid-template-columns:repeat(1,1fr)} }
-</style>
+  <meta charset="UTF-8" />
+  <title>Temporizadores Sincronizados</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 { margin-bottom: 10px; }
+    .controls {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      background: #222;
+      border: 1px solid #555;
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover { background: #333; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      width: 100%;
+      max-width: 900px;
+    }
+    .timer {
+      border: 1px solid #333;
+      padding: 15px;
+      border-radius: 10px;
+      background: #1b1b1b;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .note {
+      margin-top: 10px;
+      background: #000;
+      border: 1px solid #444;
+      border-radius: 6px;
+      width: 100%;
+      color: #fff;
+      padding: 5px;
+    }
+  </style>
 </head>
 <body>
-
-<header>
-  <div>
-    <strong style="font-size:18px">Cronómetros sincronizados</strong>
-    <div class="small">Orden: izquierda→derecha, luego fila nueva. Máx 3 por fila</div>
-  </div>
-
+  <h1>Temporizadores Sincronizados</h1>
   <div class="controls">
-    <button id="startDayBtn">Iniciar día</button>
-    <button id="endDayBtn">Finalizar día</button>
-    <button id="addTimerBtn">+ Añadir cronómetro</button>
+    <button id="startDay">Iniciar día</button>
+    <button id="endDay">Finalizar día</button>
+    <button id="addTimer">Añadir cronómetro</button>
   </div>
-</header>
 
-<!-- Zona para configurar nuevo timer -->
-<div id="newTimerForm" style="display:none;margin-bottom:12px">
-  <div style="max-width:420px">
-    <input id="newName" type="text" placeholder="Nombre de la actividad (p.ej. Meditar)" />
-    <div style="margin-top:8px">
-      <input id="newMin" type="number" placeholder="Tiempo mínimo objetivo (minutos)" />
-    </div>
-    <div style="margin-top:8px">
-      <textarea id="newNote" placeholder="Nota (editable)"></textarea>
-    </div>
-    <div style="margin-top:8px">
-      <button id="createTimerBtn">Crear</button>
-      <button onclick="toggleNewForm(false)" style="background:#ccc;color:#012;padding:8px 10px;border-radius:8px;border:none;margin-left:8px">Cancelar</button>
-    </div>
-  </div>
-</div>
+  <div id="timersContainer" class="grid"></div>
 
-<!-- Grid de cronómetros -->
-<div class="grid" id="grid"></div>
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEPnILLEpCBe5zZV1lb-_wUbRCilVfAIbmf7I2L1VMufAJrxQM2YEZPbhmWVnYvcNCfQ/exec"; // tu URL aquí
+    let state = { dayNum: 0, dayStarted: null, dayEnded: null, timers: [] };
+    let localTimers = {};
 
-<script>
-/* ========== CONFIG ========== */
-const API_URL = "https://script.google.com/macros/s/AKfycbwuo7Cz9ebX5KbDVf_jbN4SYCP-N-nebYHh8rnX1VR-UM-yycoecXop-xeEVs_dIQeiVw/exec"; // << reemplaza
-const AUTH_KEY = "ProyectoPolímata";        // << reemplaza
-const POLL_INTERVAL_MS = 3000; // polling every 3s for sync
-/* =========================== */
-
-let state = { // Estructura del state guardado en server
-  dayNum: 0,
-  dayStarted: null, // ISO string
-  dayEnded: null,
-  timers: [
-    // {id:"uuid", name:"Entrenar", seconds:0, running:false, minMinutes:30, note:""}
-  ]
-};
-
-const grid = document.getElementById("grid");
-const addTimerBtn = document.getElementById("addTimerBtn");
-const newTimerForm = document.getElementById("newTimerForm");
-const createTimerBtn = document.getElementById("createTimerBtn");
-const startDayBtn = document.getElementById("startDayBtn");
-const endDayBtn = document.getElementById("endDayBtn");
-
-addTimerBtn.onclick = ()=> toggleNewForm(true);
-createTimerBtn.onclick = createNewTimer;
-startDayBtn.onclick = startDay;
-endDayBtn.onclick = endDay;
-
-/* ---------- Util ---------- */
-function uid(){ return 'id'+Math.random().toString(36).slice(2,9); }
-function nowISO(){ return new Date().toISOString(); }
-function hhmmssFromDate(d){ return d.toTimeString().slice(0,8); }
-function simpleDate(d){ return d.toISOString().slice(0,10); }
-
-/* ---------- Server comms ---------- */
-async function serverGetState() {
-  const url = `${API_URL}?key=${encodeURIComponent(AUTH_KEY)}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data;
-}
-async function serverUpdateState(newState) {
-  const url = `${API_URL}?action=update_state&key=${encodeURIComponent(AUTH_KEY)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(newState),
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data;
-}
-async function serverRecordDay(payload) {
-  const url = `${API_URL}?action=record_day&key=${encodeURIComponent(AUTH_KEY)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data;
-}
-
-/* ---------- Local sync and UI ---------- */
-function renderGrid(){
-  grid.innerHTML = "";
-  state.timers.forEach(timer=>{
-    const c = document.createElement("div");
-    c.className = "card";
-    c.id = 'card-'+timer.id;
-    c.innerHTML = `
-      <div class="title">${timer.name}</div>
-      <div class="display" id="disp-${timer.id}">${formatTime(timer.seconds)}</div>
-      <div class="row">
-        <button onclick="toggleTimer('${timer.id}')">${timer.running? 'Pausar':'Iniciar'}</button>
-        <button onclick="resetTimer('${timer.id}')">Reset</button>
-      </div>
-      <div style="margin-top:8px">
-        <div class="small">Objetivo: <input type="number" id="min-${timer.id}" value="${timer.minMinutes||0}" style="width:80px" /> min</div>
-        <div style="margin-top:6px">
-          <textarea id="note-${timer.id}" placeholder="Nota...">${timer.note||''}</textarea>
-        </div>
-      </div>
-    `;
-    grid.appendChild(c);
-
-    // attach listeners for inline inputs:
-    document.getElementById('min-'+timer.id).addEventListener('change', (e)=>{
-      timer.minMinutes = Number(e.target.value)||0; pushStateToServerDebounced();
-    });
-    document.getElementById('note-'+timer.id).addEventListener('input', (e)=>{
-      timer.note = e.target.value; pushStateToServerDebounced();
-    });
-  });
-}
-
-/* ---------- Time formatting ---------- */
-function formatTime(sec){
-  sec = sec || 0;
-  const h = String(Math.floor(sec/3600)).padStart(2,'0');
-  const m = String(Math.floor((sec%3600)/60)).padStart(2,'0');
-  const s = String(sec%60).padStart(2,'0');
-  return `${h}:${m}:${s}`;
-}
-
-/* ---------- Timer controls ---------- */
-function toggleTimer(id){
-  const t = state.timers.find(x=>x.id===id); if(!t) return;
-  t.running = !t.running;
-  if (t.running) t.lastStart = Date.now(); // local epoch ms for client computing
-  else {
-    // compute elapsed since lastStart
-    if (t.lastStart) {
-      const delta = Math.floor((Date.now() - t.lastStart)/1000);
-      t.seconds = (t.seconds||0) + delta;
-      delete t.lastStart;
+    async function fetchState() {
+      const res = await fetch(SCRIPT_URL + "?action=get_state");
+      const json = await res.json();
+      if (!json.error) {
+        state = json;
+        renderTimers();
+      }
     }
-  }
-  renderGrid();
-  pushStateToServerDebounced();
-}
-function resetTimer(id){
-  const t = state.timers.find(x=>x.id===id); if(!t) return;
-  t.seconds = 0; t.running = false; delete t.lastStart;
-  renderGrid();
-  pushStateToServerDebounced();
-}
 
-/* ---------- Add new timer ---------- */
-function toggleNewForm(show){ newTimerForm.style.display = show? 'block':'none'; }
-function createNewTimer(){
-  const name = document.getElementById('newName').value.trim() || ('Actividad '+(state.timers.length+1));
-  const min = Number(document.getElementById('newMin').value)||0;
-  const note = document.getElementById('newNote').value || '';
-  const newT = { id: uid(), name, seconds:0, running:false, minMinutes: min, note };
-  state.timers.push(newT);
-  toggleNewForm(false);
-  renderGrid();
-  pushStateToServerDebounced();
-}
-
-/* ---------- Day control ---------- */
-async function startDay(){
-  if(state.dayStarted && !confirm("Ya hay un día iniciado. Reiniciar?")) return;
-  state.dayNum = (state.dayNum||0) + 1;
-  state.dayStarted = nowISO();
-  state.dayEnded = null;
-  console.log("Día iniciado:", state.dayNum, state.dayStarted);
-  pushStateToServerDebounced();
-}
-async function endDay(){
-  if(!state.dayStarted){ alert("No hay día iniciado."); return; }
-  // finalize running timers: compute elapsed from lastStart
-  const finISO = nowISO();
-  state.timers.forEach(t=>{
-    if(t.running && t.lastStart){
-      const delta = Math.floor((Date.now() - t.lastStart)/1000);
-      t.seconds = (t.seconds||0) + delta;
-      t.running = false;
-      delete t.lastStart;
+    async function saveState() {
+      await fetch(SCRIPT_URL + "?action=update_state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state)
+      });
     }
-  });
-  // Prepare entries for server
-  const entries = state.timers.map(t => {
-    return {
-      actividad: t.name,
-      segundos: t.seconds || 0,
-      inicio_hhmmss: t.dayStartTime || hhmmssFromDate(new Date(state.dayStarted)),
-      fin_hhmmss: hhmmssFromDate(new Date(finISO))
-    };
-  });
-  const payload = {
-    dayNum: state.dayNum,
-    inicioISO: state.dayStarted,
-    finISO: finISO,
-    entries: entries
-  };
-  // Send to server
-  await serverRecordDay(payload).catch(e=> console.error(e));
-  // Reset timers locally and update day info
-  state.dayEnded = finISO;
-  state.timers.forEach(t => { t.seconds = 0; t.running = false; delete t.lastStart; });
-  // push new state (timers zeroed + day info)
-  await serverUpdateState(state).catch(e=>console.error(e));
-  renderGrid();
-  alert("Día registrado y cronómetros reseteados.");
-}
 
-/* ---------- Sync: apply server state locally ---------- */
-let pushTimeout=null;
-function pushStateToServerDebounced(){
-  if(pushTimeout) clearTimeout(pushTimeout);
-  pushTimeout = setTimeout(()=>{ serverUpdateState(state).catch(e=>console.error(e)); }, 600);
-}
+    function renderTimers() {
+      const container = document.getElementById("timersContainer");
+      container.innerHTML = "";
+      state.timers.forEach((t, i) => {
+        const div = document.createElement("div");
+        div.className = "timer";
 
-async function pollLoop(){
-  try {
-    const serverState = await serverGetState();
-    if(!serverState || Object.keys(serverState).length===0) {
-      // if server empty, initialize server with local state
-      await serverUpdateState(state);
-      return;
+        const h3 = document.createElement("h3");
+        h3.textContent = t.name;
+        div.appendChild(h3);
+
+        const timeEl = document.createElement("div");
+        timeEl.textContent = formatTime(t.seconds);
+        div.appendChild(timeEl);
+
+        const startBtn = document.createElement("button");
+        startBtn.textContent = t.running ? "Pausar" : "Iniciar";
+        startBtn.onclick = () => toggleTimer(i);
+        div.appendChild(startBtn);
+
+        const note = document.createElement("textarea");
+        note.className = "note";
+        note.value = t.note || "";
+        note.onchange = () => { t.note = note.value; saveState(); };
+        div.appendChild(note);
+
+        container.appendChild(div);
+      });
     }
-    // If serverState differs, accept server as truth (simple strategy)
-    // Compare serialized strings
-    const s1 = JSON.stringify(serverState);
-    const s2 = JSON.stringify(state);
-    if(s1 !== s2){
-      // apply serverState locally
-      state = serverState;
-      // ensure lastStart timestamps are not persisted from server; clients will set lastStart when toggling running
-      state.timers.forEach(t => { delete t.lastStart; });
-      renderGrid();
-    } else {
-      // server==local; nothing to do
-    }
-  } catch(err){
-    console.warn("poll error", err);
-  }
-}
 
-// start polling
-setInterval(pollLoop, POLL_INTERVAL_MS);
-
-/* ---------- Initialization: load server state or default ---------- */
-(async function init(){
-  // try load server state
-  try {
-    const s = await serverGetState();
-    if(s && s.timers) {
-      state = s;
-      state.timers.forEach(t => delete t.lastStart);
-    } else {
-      // initial default timers
-      state = { dayNum:0, dayStarted:null, dayEnded:null, timers: [
-        {id:uid(), name:"Entrenar", seconds:0, running:false, minMinutes:0, note:""},
-        {id:uid(), name:"Estudiar", seconds:0, running:false, minMinutes:0, note:""},
-        {id:uid(), name:"Proyectos", seconds:0, running:false, minMinutes:0, note:""}
-      ]};
-      await serverUpdateState(state);
+    function formatTime(s) {
+      const h = String(Math.floor(s / 3600)).padStart(2, '0');
+      const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const sec = String(s % 60).padStart(2, '0');
+      return `${h}:${m}:${sec}`;
     }
-  } catch(e){
-    console.warn("No se pudo obtener estado del servidor, trabajando localmente", e);
-  }
-  renderGrid();
-  // ensure poll runs immediately
-  pollLoop();
-})();
-</script>
+
+    function toggleTimer(i) {
+      if (!state.dayStarted) {
+        alert("Primero debes iniciar el día.");
+        return;
+      }
+      const t = state.timers[i];
+      if (t.running) {
+        t.running = false;
+        t.lastStart = null;
+      } else {
+        t.running = true;
+        t.lastStart = Date.now();
+      }
+      saveState();
+    }
+
+    function addTimer() {
+      const name = prompt("Nombre del nuevo cronómetro:");
+      if (!name) return;
+      state.timers.push({ name, seconds: 0, running: false, note: "" });
+      saveState();
+      renderTimers();
+    }
+
+    async function startDay() {
+      state.dayStarted = new Date().toISOString();
+      state.dayEnded = null;
+      state.dayNum += 1;
+      saveState();
+    }
+
+    async function endDay() {
+      state.dayEnded = new Date().toISOString();
+      await fetch(SCRIPT_URL + "?action=record_day", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dayNum: state.dayNum,
+          inicioISO: state.dayStarted,
+          finISO: state.dayEnded,
+          entries: state.timers.map(t => ({
+            actividad: t.name,
+            segundos: t.seconds
+          }))
+        })
+      });
+      state.dayStarted = null;
+      state.timers.forEach(t => { t.seconds = 0; t.running = false; });
+      saveState();
+      renderTimers();
+    }
+
+    setInterval(() => {
+      state.timers.forEach(t => {
+        if (t.running && t.lastStart) {
+          t.seconds += 1;
+        }
+      });
+      renderTimers();
+    }, 1000);
+
+    document.getElementById("startDay").onclick = startDay;
+    document.getElementById("endDay").onclick = endDay;
+    document.getElementById("addTimer").onclick = addTimer;
+
+    fetchState();
+  </script>
 </body>
 </html>
+
+
 
 
