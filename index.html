@@ -9,41 +9,88 @@
   .timer { margin: 20px auto; padding: 20px; background: #222; border-radius: 10px; width: 250px; }
   button { margin: 5px; padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
   button:hover { background: #0056b3; }
+  #login { margin-top: 150px; }
+  input { padding: 10px; font-size: 16px; border-radius: 5px; border: none; }
 </style>
 </head>
 <body>
-<h1>Cronómetros diarios</h1>
 
-<div id="timers"></div>
+<!-- === SECCIÓN DE LOGIN === -->
+<div id="login">
+  <h2>Acceso restringido</h2>
+  <p>Introduce la contraseña para continuar</p>
+  <input type="password" id="passInput" placeholder="Contraseña" />
+  <button onclick="verificar()">Entrar</button>
+  <p id="mensaje" style="color:red;"></p>
+</div>
+
+<!-- === SECCIÓN DE CRONÓMETROS === -->
+<div id="app" style="display:none;">
+  <h1>Cronómetros diarios</h1>
+  <div id="timers"></div>
+</div>
 
 <script>
-// === CONFIGURACIÓN ===
+// ====================== CONFIGURACIÓN ======================
 const actividades = ["Entrenar", "Estudiar", "Proyectos"];
-const endpoint = "https://script.google.com/macros/s/AKfycby0i_vmIB1hdTsgkXqqOjQb_94yW0xT5XC35aBp8VFiFnCY56lRj_23MNQpDDfUroTj/exec"; // 🔹 Reemplaza con tu URL de Apps Script
+const endpoint = "https://script.google.com/macros/s/AKfycby0i_vmIB1hdTsgkXqqOjQb_94yW0xT5XC35aBp8VFiFnCY56lRj_23MNQpDDfUroTj/exec"; // 🔹 Reemplázalo con tu URL de Apps Script
+const PASSWORD_HASH = "4ed3ca936f2b5dc9471a8e201f0be89e"; // <-- MD5("password") (ejemplo: "password")
+const TIEMPO_SESION = 1000 * 60 * 60 * 6; // 6 horas
 
-// === VARIABLES ===
+// ====================== FUNCIONES DE LOGIN ======================
+function md5(s) {
+  // Implementación ligera de MD5
+  return CryptoJS.MD5(s).toString();
+}
+
+function verificar() {
+  const input = document.getElementById("passInput").value;
+  if (md5(input) === PASSWORD_HASH) {
+    localStorage.setItem("sesionValida", Date.now());
+    mostrarApp();
+  } else {
+    document.getElementById("mensaje").textContent = "Contraseña incorrecta.";
+  }
+}
+
+function mostrarApp() {
+  document.getElementById("login").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  iniciarApp();
+}
+
+function validarSesion() {
+  const sesion = localStorage.getItem("sesionValida");
+  if (sesion && Date.now() - sesion < TIEMPO_SESION) {
+    mostrarApp();
+  }
+}
+
+// ====================== LÓGICA DE CRONÓMETROS ======================
 let tiempos = {};
 let intervalos = {};
 let fechaActual = new Date().toLocaleDateString("es-PE");
 
-// === CREACIÓN DE INTERFAZ ===
-actividades.forEach(actividad => {
-  const div = document.createElement("div");
-  div.className = "timer";
-  div.innerHTML = `
-    <h2>${actividad}</h2>
-    <div id="display-${actividad}">00:00:00</div>
-    <button onclick="toggle('${actividad}')">Iniciar / Pausar</button>
-    <button onclick="reset('${actividad}')">Reset</button>
-  `;
-  document.getElementById("timers").appendChild(div);
-});
+function iniciarApp() {
+  actividades.forEach(actividad => {
+    const div = document.createElement("div");
+    div.className = "timer";
+    div.innerHTML = `
+      <h2>${actividad}</h2>
+      <div id="display-${actividad}">00:00:00</div>
+      <button onclick="toggle('${actividad}')">Iniciar / Pausar</button>
+      <button onclick="reset('${actividad}')">Reset</button>
+    `;
+    document.getElementById("timers").appendChild(div);
+  });
 
-// === FUNCIONES ===
+  cargarDesdeStorage();
+  programarReseteoAutomatico();
+}
+
 function cargarDesdeStorage() {
   const guardado = JSON.parse(localStorage.getItem("tiempos")) || {};
   if (guardado.fecha !== fechaActual) {
-    // Si es un nuevo día, resetea todo
     tiempos = {};
     guardarEnStorage();
   } else {
@@ -89,34 +136,32 @@ function enviarDatos(actividad) {
   fetch(endpoint, {
     method: "POST",
     body: JSON.stringify({actividad, segundos: tiempos[actividad] || 0})
-  }).catch(() => {}); // Evita errores visibles si no hay conexión
+  }).catch(() => {});
 }
 
-// === RESETEO AUTOMÁTICO A LAS 00:00 ===
 function programarReseteoAutomatico() {
   const ahora = new Date();
   const mañana = new Date(ahora);
-  mañana.setHours(24, 0, 5, 0); // 5 segundos después de la medianoche
+  mañana.setHours(24, 0, 5, 0);
   const msRestantes = mañana - ahora;
-
   setTimeout(() => {
-    // Se ejecuta al llegar a medianoche
     fechaActual = new Date().toLocaleDateString("es-PE");
     tiempos = {};
     guardarEnStorage();
     actividades.forEach(act => {
       actualizarDisplay(act);
-      enviarDatos(act); // Enviar reset (0 segundos)
+      enviarDatos(act);
     });
-    // Volver a programar para el siguiente día
     programarReseteoAutomatico();
   }, msRestantes);
 }
 
-// === INICIO ===
-cargarDesdeStorage();
-programarReseteoAutomatico();
+// ====================== MD5 LIBRARY ======================
+!function(n){"use strict";function d(n,t){var r=(65535&n)+(65535&t);return(n>>16)+(t>>16)+(r>>16)<<16|65535&r}function f(n,t,r,e,o,u){return d(function(n,t){return n<<t|n>>>32-t}(d(d(t,n),d(e,u)),o),r)}function l(n,t,r,e,o,u,c){return f(t&r|~t&e,n,t,o,u,c)}function g(n,t,r,e,o,u,c){return f(t&e|r&~e,n,t,o,u,c)}function v(n,t,r,e,o,u,c){return f(t^r^e,n,t,o,u,c)}function m(n,t,r,e,o,u,c){return f(r^(t|~e),n,t,o,u,c)}function i(n,t){n[t>>5]|=128<<t%32,n[14+(t+64>>>9<<4)]=t;var r,e,o,u,c,a=1732584193,f=-271733879,i=-1732584194,h=271733878;for(r=0;r<n.length;r+=16)e=a,o=f,u=i,c=h,a=l(a,f,i,h,n[r],7,-680876936),h=l(h,a,f,i,n[r+1],12,-389564586),i=l(i,h,a,f,n[r+2],17,606105819),f=l(f,i,h,a,n[r+3],22,-1044525330),a=l(a,f,i,h,n[r+4],7,-176418897),h=l(h,a,f,i,n[r+5],12,1200080426),i=l(i,h,a,f,n[r+6],17,-1473231341),f=l(f,i,h,a,n[r+7],22,-45705983),a=l(a,f,i,h,n[r+8],7,1770035416),h=l(h,a,f,i,n[r+9],12,-1958414417),i=l(i,h,a,f,n[r+10],17,-42063),f=l(f,i,h,a,n[r+11],22,-1990404162),a=l(a,f,i,h,n[r+12],7,1804603682),h=l(h,a,f,i,n[r+13],12,-40341101),i=l(i,h,a,f,n[r+14],17,-1502002290),f=l(f,i,h,a,n[r+15],22,1236535329),a=g(a,f,i,h,n[r+1],5,-165796510),h=g(h,a,f,i,n[r+6],9,-1069501632),i=g(i,h,a,f,n[r+11],14,643717713),f=g(f,i,h,a,n[r],20,-373897302),a=g(a,f,i,h,n[r+5],5,-701558691),h=g(h,a,f,i,n[r+10],9,38016083),i=g(i,h,a,f,n[r+15],14,-660478335),f=g(f,i,h,a,n[r+4],20,-405537848),a=g(a,f,i,h,n[r+9],5,568446438),h=g(h,a,f,i,n[r+14],9,-1019803690),i=g(i,h,a,f,n[r+3],14,-187363961),f=g(f,i,h,a,n[r+8],20,1163531501),a=g(a,f,i,h,n[r+13],5,-1444681467),h=g(h,a,f,i,n[r+2],9,-51403784),i=g(i,h,a,f,n[r+7],14,1735328473),f=g(f,i,h,a,n[r+12],20,-1926607734),a=v(a,f,i,h,n[r+5],4,-378558),h=v(h,a,f,i,n[r+8],11,-2022574463),i=v(i,h,a,f,n[r+11],16,1839030562),f=v(f,i,h,a,n[r+14],23,-35309556),a=v(a,f,i,h,n[r+1],4,-1530992060),h=v(h,a,f,i,n[r+4],11,1272893353),i=v(i,h,a,f,n[r+7],16,-155497632),f=v(f,i,h,a,n[r+10],23,-1094730640),a=v(a,f,i,h,n[r+13],4,681279174),h=v(h,a,f,i,n[r],11,-358537222),i=v(i,h,a,f,n[r+3],16,-722521979),f=v(f,i,h,a,n[r+6],23,76029189),a=v(a,f,i,h,n[r+9],4,-640364487),h=v(h,a,f,i,n[r+12],11,-421815835),i=v(i,h,a,f,n[r+15],16,530742520),f=v(f,i,h,a,n[r+2],23,-995338651),a=m(a,f,i,h,n[r],6,-198630844),h=m(h,a,f,i,n[r+7],10,1126891415),i=m(i,h,a,f,n[r+14],15,-1416354905),f=m(f,i,h,a,n[r+5],21,-57434055),a=m(a,f,i,h,n[r+12],6,1700485571),h=m(h,a,f,i,n[r+3],10,-1894986606),i=m(i,h,a,f,n[r+10],15,-1051523),f=m(f,i,h,a,n[r+1],21,-2054922799),a=m(a,f,i,h,n[r+8],6,1873313359),h=m(h,a,f,i,n[r+15],10,-30611744),i=m(i,h,a,f,n[r+6],15,-1560198380),f=m(f,i,h,a,n[r+13],21,1309151649),a=m(a,f,i,h,n[r+4],6,-145523070),h=m(h,a,f,i,n[r+11],10,-1120210379),i=m(i,h,a,f,n[r+2],15,718787259),f=m(f,i,h,a,n[r+9],21,-343485551),a=d(a,e),f=d(f,o),i=d(i,u),h=d(h,c);return[a,f,i,h]}function t(n){var t,r="",e=32*n.length;for(t=0;t<e;t+=8)r+=String.fromCharCode(n[t>>5]>>>t%32&255);return r}function r(n){var t,r=[];for(r[(n.length>>2)-1]=void 0,t=0;t<r.length;t+=1)r[t]=0;var e=8*n.length;for(t=0;t<e;t+=8)r[t>>5]|=(255&n.charCodeAt(t/8))<<t%32;return r}function e(n){var t,e,r="0123456789abcdef",o="";for(e=0;e<n.length;e+=1)t=n.charCodeAt(e),o+=r.charAt(t>>>4&15)+r.charAt(15&t);return o}function o(n){return e(t(i(r(n),8*n.length)))}"function"==typeof define&&define.amd?define(function(){return o}):"object"==typeof exports?module.exports=o:n.CryptoJS={MD5:o}}(this);
 
+// === Validar sesión previa ===
+validarSesion();
 </script>
 </body>
 </html>
+
