@@ -92,19 +92,34 @@ function hhmmssFromDate(d){ return d.toTimeString().slice(0,8); }
 function simpleDate(d){ return d.toISOString().slice(0,10); }
 
 /* ---------- Server comms ---------- */
-async function serverGetState(){
-  const url = API_URL + '?key=' + encodeURIComponent(AUTH_KEY);
+async function serverGetState() {
+  const url = `${API_URL}?key=${encodeURIComponent(AUTH_KEY)}`;
   const res = await fetch(url);
-  if(!res.ok) throw new Error("no server");
-  return await res.json();
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
 }
-async function serverUpdateState(newState){
-  const url = API_URL + '?action=update_state&key=' + encodeURIComponent(AUTH_KEY);
-  await fetch(url, {method:'POST', body: JSON.stringify(newState)});
+async function serverUpdateState(newState) {
+  const url = `${API_URL}?action=update_state&key=${encodeURIComponent(AUTH_KEY)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(newState),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
 }
-async function serverRecordDay(payload){
-  const url = API_URL + '?action=record_day&key=' + encodeURIComponent(AUTH_KEY);
-  await fetch(url, {method:'POST', body: JSON.stringify(payload)});
+async function serverRecordDay(payload) {
+  const url = `${API_URL}?action=record_day&key=${encodeURIComponent(AUTH_KEY)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
 }
 
 /* ---------- Local sync and UI ---------- */
